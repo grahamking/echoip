@@ -1,6 +1,6 @@
 # echoip
 
-Go server that echoes your IP address. Handy to check if you are on a VPN, or what you IP address looks like. Single UDP packet in each direction.
+Go server that echoes your IP address. Handy to check if you are on a VPN, or what your IP address looks like. Single UDP packet in each direction.
 
 ## Try it live
 
@@ -56,7 +56,7 @@ The by-committee way to do this is [STUN](https://en.wikipedia.org/wiki/Session_
 
 `echoip` is intended to be something you hit from your bash prompt, or you tmux config, or even maybe a browser or gnome extension. Never be in the dark about how you face the world again!
 
-Was there an easier way to do this? Something that already exists? Please let me know - maybe raise a github issue (Suggested title: "Learn you some Internets").
+Was there an easier way to do this? Something that already exists? Please let me know - maybe raise a github issue.
 
 ### License
 
