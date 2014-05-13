@@ -8,17 +8,17 @@ I run echoip as a service on `plebis.net` port 7777. You send it a UDP packet (c
 
 UDP (prefered):
 
-> echo " " | nc -q 1 -u plebis.net 7777
+> echo " " | nc -u plebis.net 7777
 
 TCP (if you have to):
 
-> echo " " | nc -q 1 plebis.net 7777
+> echo " " | nc plebis.net 7777
 
 TCP over TOR (assuming default tor port 9050):
 
-> echo " " | nc -q 1 -x 127.0.0.1:9050 plebis.net 7777
+> echo " " | nc -x 127.0.0.1:9050 plebis.net 7777
 
-These will show your address and location, pause for up to a second, then quit.
+On Linux you can add `-q 1` to `nc` to auto-quit after a second.
 
 ## Run it yourself:
 
