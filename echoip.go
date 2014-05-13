@@ -52,18 +52,28 @@ top:
 	if err != nil {
 		log.Fatal(err)
 	}
+	tcpaddr, err := net.ResolveTCPAddr("tcp", addr+":"+port)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	log.Println("Listening on", udpaddr)
+	log.Println("Listening TCP and UDP on", udpaddr)
 
 	conn, err := net.ListenUDP("udp", udpaddr)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	listener, err := net.ListenTCP("tcp", tcpaddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	var wg sync.WaitGroup
-	wg.Add(numWorkers)
+	wg.Add(numWorkers * 2)
 	for i := 1; i <= numWorkers; i++ {
-		go worker(i, conn, db, wg)
+		go udpworker(i, conn, db, wg)
+		go tcpworker(i, listener, db, wg)
 	}
 
 	wg.Wait()
@@ -72,7 +82,40 @@ top:
 	log.Println("End")
 }
 
-func worker(id int, conn *net.UDPConn, db *geoip2.Reader, wg sync.WaitGroup) {
+func tcpworker(id int, listener *net.TCPListener, db *geoip2.Reader, wg sync.WaitGroup) {
+	var conn *net.TCPConn
+	var err error
+	var remoteAddr *net.TCPAddr
+	var record *geoip2.City
+	var outMsg string
+
+	for {
+		conn, err = listener.AcceptTCP()
+		if err != nil {
+			log.Println("ERROR", err)
+			continue
+		}
+		remoteAddr = conn.RemoteAddr().(*net.TCPAddr)
+
+		record, err = db.City(remoteAddr.IP)
+		if err != nil {
+			log.Println("ERROR", err)
+			continue
+		}
+
+		outMsg = formatMsg(remoteAddr.IP.String(), record)
+		log.Print("TCP", id, " ", outMsg)
+
+		_, err = conn.Write([]byte(outMsg))
+		if err != nil {
+			log.Println("ERROR", err)
+		}
+		conn.Close() // Server close might cause lots of TIME_WAIT
+	}
+	wg.Done()
+}
+
+func udpworker(id int, conn *net.UDPConn, db *geoip2.Reader, wg sync.WaitGroup) {
 	log.Println("Worker", id, "started")
 
 	var err error
@@ -94,13 +137,12 @@ func worker(id int, conn *net.UDPConn, db *geoip2.Reader, wg sync.WaitGroup) {
 			continue
 		}
 
-		outMsg = formatMsg(remoteAddr, record)
-		log.Print(id, " ", outMsg)
+		outMsg = formatMsg(remoteAddr.IP.String(), record)
+		log.Print("UDP", id, " ", outMsg)
 
 		_, err = conn.WriteToUDP([]byte(outMsg), remoteAddr)
 		if err != nil {
 			log.Println("ERROR", err)
-			continue
 		}
 	}
 
@@ -108,10 +150,10 @@ func worker(id int, conn *net.UDPConn, db *geoip2.Reader, wg sync.WaitGroup) {
 	wg.Done()
 }
 
-func formatMsg(remoteAddr *net.UDPAddr, record *geoip2.City) string {
+func formatMsg(remoteAddr string, record *geoip2.City) string {
 
 	pieces := make([]string, 1, 4)
-	pieces[0] = remoteAddr.IP.String()
+	pieces[0] = remoteAddr
 
 	city := record.City.Names["en"]
 	if city != "" {
