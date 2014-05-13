@@ -2,15 +2,25 @@
 
 Go server that echoes your IP address. Handy to check if you are on a VPN, or what you IP address looks like. Single UDP packet in each direction.
 
-Try it live:
+## Try it live
+
+I run echoip as a service on `plebis.net` port 7777. You send it a UDP packet (containing anything), it responds with a UDP packet with your IP address as seen by remote host, and location as determined by MaxMind GeoIP Lite city database.  Feel free to use it in your scripts.
+
+UDP (prefered):
 
 > echo " " | nc -q 1 -u plebis.net 7777
 
-That will show your address and location, pause for a second, then quit.
+TCP (if you have to):
 
-Feel free to use the service: You send it a UDP packet (containing anything), it responds with a UDP packet with your IP address as seen by remote host, and location as determined by MaxMind GeoIP Lite city database.
+> echo " " | nc -q 1 plebis.net 7777
 
-Run it yourself:
+TCP over TOR (assuming default tor port 9050):
+
+> echo " " | nc -q 1 -x 127.0.0.1:9050 plebis.net 7777
+
+These will show your address and location, pause for up to a second, then quit.
+
+## Run it yourself:
 
 - Download [GeoLite2-City.mmdb](http://dev.maxmind.com/geoip/geoip2/geolite2/)
 - Download and install [Go](http://golang.org)
