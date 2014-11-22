@@ -1,63 +1,49 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"strings"
-	"sync"
+	"syscall"
 
-	"github.com/oschwald/geoip2-golang"
+	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
 const numWorkers = 4
-const port = "7777"
 
 var skipPrefix = []string{"vm", "vbox", "tun"}
 
+var port = flag.String("p", "7777", "Port")
+var iface = flag.String("i", "auto", "Interface. 'auto' to let echoip choose")
+var help = flag.Bool("h", false, "Show usage")
+
 func main() {
-	log.Println("Start")
-
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		log.Fatal(err)
+	flag.Parse()
+	if *help {
+		flag.Usage()
+		return
 	}
-	var addr string
-top:
-	for _, ifi := range interfaces {
 
-		if ifi.Flags&(1<<uint(net.FlagLoopback)) == 0 ||
-			ifi.Flags&net.FlagUp == 0 {
-			continue
-		}
-		for _, s := range skipPrefix {
-			if strings.HasPrefix(ifi.Name, s) {
-				continue top
-			}
-		}
-
-		addrs, err := ifi.Addrs()
-		if err != nil {
-			log.Fatal(err)
-		}
-		addr = strings.Split(addrs[0].String(), "/")[0]
-		break
-	}
+	ifaceName, addr := findBindAddress(*iface)
 
 	db, err := geoip2.Open("GeoLite2-City.mmdb")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	udpaddr, err := net.ResolveUDPAddr("udp", addr+":"+port)
+	udpaddr, err := net.ResolveUDPAddr("udp", addr+":"+*port)
 	if err != nil {
 		log.Fatal(err)
 	}
-	tcpaddr, err := net.ResolveTCPAddr("tcp", addr+":"+port)
+	tcpaddr, err := net.ResolveTCPAddr("tcp", addr+":"+*port)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("Listening TCP and UDP on", udpaddr)
+	log.Printf("Listening on %s %s (tcp, udp)\n", ifaceName, udpaddr)
 
 	conn, err := net.ListenUDP("udp", udpaddr)
 	if err != nil {
@@ -69,20 +55,68 @@ top:
 		log.Fatal(err)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(numWorkers * 2)
 	for i := 1; i <= numWorkers; i++ {
-		go udpworker(i, conn, db, wg)
-		go tcpworker(i, listener, db, wg)
+		go udpworker(i, conn, db)
+		go tcpworker(i, listener, db)
 	}
 
-	wg.Wait()
+	ch := make(chan os.Signal, 2)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	<-ch
 
 	conn.Close()
-	log.Println("End")
+	log.Println("Bye")
 }
 
-func tcpworker(id int, listener *net.TCPListener, db *geoip2.Reader, wg sync.WaitGroup) {
+func findBindAddress(ifaceName string) (string, string) {
+	ifi := selectInterface(ifaceName)
+	addrs, err := ifi.Addrs()
+	if err != nil {
+		log.Fatal(err)
+	}
+	addr := strings.Split(addrs[0].String(), "/")[0]
+	return ifi.Name, addr
+}
+
+func selectInterface(ifaceName string) *net.Interface {
+	var ifi *net.Interface
+	var err error
+
+	if ifaceName != "auto" {
+		ifi, err = net.InterfaceByName(ifaceName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return ifi
+	}
+
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+top:
+	for _, candidate := range interfaces {
+
+		isLoopback := candidate.Flags&(1<<uint(net.FlagLoopback)) == 0
+		isDown := candidate.Flags&net.FlagUp == 0
+		if isLoopback || isDown {
+			//log.Printf("skipping %s. isLoopback: %t, isDown: %t\n", candidate.Name, isLoopback, isDown)
+			continue
+		}
+		for _, s := range skipPrefix {
+			if strings.HasPrefix(candidate.Name, s) {
+				//log.Printf("skipping %s, has skip prefix %s\n", candidate.Name, s)
+				continue top
+			}
+		}
+		ifi = &candidate
+		break
+	}
+	return ifi
+}
+
+func tcpworker(id int, listener *net.TCPListener, db *geoip2.Reader) {
 	var conn *net.TCPConn
 	var err error
 	var remoteAddr *net.TCPAddr
@@ -112,11 +146,10 @@ func tcpworker(id int, listener *net.TCPListener, db *geoip2.Reader, wg sync.Wai
 		}
 		conn.Close() // Server close might cause lots of TIME_WAIT
 	}
-	wg.Done()
 }
 
-func udpworker(id int, conn *net.UDPConn, db *geoip2.Reader, wg sync.WaitGroup) {
-	log.Println("Worker", id, "started")
+func udpworker(id int, conn *net.UDPConn, db *geoip2.Reader) {
+	//log.Println("Worker", id, "started")
 
 	var err error
 	var remoteAddr *net.UDPAddr
@@ -145,9 +178,7 @@ func udpworker(id int, conn *net.UDPConn, db *geoip2.Reader, wg sync.WaitGroup) 
 			log.Println("ERROR", err)
 		}
 	}
-
-	log.Println("Worker", id, "end")
-	wg.Done()
+	//log.Println("Worker", id, "end")
 }
 
 func formatMsg(remoteAddr string, record *geoip2.City) string {
