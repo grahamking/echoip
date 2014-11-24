@@ -6,4 +6,5 @@ USER www-data
 WORKDIR /usr/local/echoip
 COPY GeoLite2-City.mmdb /usr/local/echoip/
 COPY echoip /usr/local/echoip/
+EXPOSE 7777
 CMD ["/usr/local/echoip/echoip", "-i", "eth0"]
