@@ -1,0 +1,10 @@
+---
+# ansible-playbook main.yml
+- name: Run echoip on remote server
+  hosts: your-host-name
+  sudo: True
+  tasks:
+    - name: Copy upstart script
+      copy: src=echoip.conf dest=/etc/init/
+    - name: Start echoip container
+      service: name=echoip state=started enabled=yes pattern=echoip
