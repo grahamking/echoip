@@ -4,5 +4,7 @@
   hosts: host2
   sudo: True
   tasks:
+    - name: Stop echoip container
+      docker: name=echoip image=localhost:5000/echoip state=absent
     - name: Start echoip container
-      command: docker run -d --net=host --restart=always --name=echoip grahamking/echoip
+      command: docker run -d --net=host --restart=always --name=echoip localhost:5000/echoip
