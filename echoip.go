@@ -14,7 +14,7 @@ import (
 
 const numWorkers = 4
 
-var skipPrefix = []string{"vm", "vbox", "tun"}
+var skipPrefix = []string{"vm", "vbox", "tun", "virbr"}
 
 var port = flag.String("p", "7777", "Port")
 var iface = flag.String("i", "auto", "Interface. 'auto' to let echoip choose")
@@ -100,8 +100,12 @@ top:
 
 		isLoopback := candidate.Flags&(1<<uint(net.FlagLoopback)) == 0
 		isDown := candidate.Flags&net.FlagUp == 0
-		if isLoopback || isDown {
-			//log.Printf("skipping %s. isLoopback: %t, isDown: %t\n", candidate.Name, isLoopback, isDown)
+		hasAddrs := false
+		if addrs, err := candidate.Addrs(); err == nil && len(addrs) > 0 {
+			hasAddrs = true
+		}
+		if isLoopback || isDown || !hasAddrs {
+			//log.Printf("skipping %s. isLoopback: %t, isDown: %t, hasAddrs: %t\n", candidate.Name, isLoopback, isDown, hasAddrs)
 			continue
 		}
 		for _, s := range skipPrefix {
